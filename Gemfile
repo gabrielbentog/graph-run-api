@@ -43,3 +43,4 @@ end
 # Websocket
 gem 'faye-websocket'
 
+gem 'simple_command'
