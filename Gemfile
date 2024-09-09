@@ -42,5 +42,7 @@ end
 
 # Websocket
 gem 'faye-websocket'
+gem 'eventmachine', '~> 1.2'
+gem 'async-websocket'
 
 gem 'simple_command'
