@@ -45,4 +45,6 @@ gem 'faye-websocket'
 gem 'eventmachine', '~> 1.2'
 gem 'async-websocket'
 
+gem 'httparty'
+
 gem 'simple_command'

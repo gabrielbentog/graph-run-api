@@ -20,7 +20,6 @@ class WebSocketClient
       
       @ws.on :open do |event|
         p [:open]
-        send_message({ type: 'state_update' }.to_json)
       end
 
       @ws.on :message do |event|
@@ -32,6 +31,7 @@ class WebSocketClient
       @ws.on :close do |event|
         p [:close, event.code, event.reason]
         @ws = nil
+        EM.stop
       end
     }
   end
@@ -42,53 +42,70 @@ class WebSocketClient
 
   def handle_message(message)
     begin
-      data = JSON.parse(message)
-      
-      case data['type']
-      when 'state'
-        handle_state_message(data)
-      when 'state_request'
-        handle_state_request(data)
-      else
-        puts "Tipo de mensagem desconhecido: #{data['type']}"
+      # Extraindo o vértice atual e a lista de adjacentes
+      vertex_match = message.match(/Vértice atual: (\d+)/)
+      adjacents_match = message.match(/Adjacentes: \[(.*)\]/)
+  
+      unless vertex_match && adjacents_match
+        puts "Mensagem não está no formato esperado: #{message}"
+        return
       end
-    rescue JSON::ParserError => e
-      puts "Erro ao decodificar JSON: #{e.message}"
+  
+      current_vertex = vertex_match[1]
+      adjacents = adjacents_match[1].split(',').map(&:strip).map { |a| a.delete("'") }
+  
+      # Adicionando o nó atual ao banco de dados, se ainda não existir
+      current_node = Node.find_or_create_by!(name: current_vertex, graph: @graph)
+  
+      # Verificar se o vértice atual já foi visitado
+      if @visited_states.include?(current_vertex)
+        unvisited_adjacent = adjacents.find { |v| !@visited_states.include?(v) }
+        if unvisited_adjacent
+          puts "Explorando o vértice: #{unvisited_adjacent}"
+          # Adicionar o nó adjacente ao banco de dados, se ainda não existir
+          adjacent_node = Node.find_or_create_by!(name: unvisited_adjacent, graph: @graph)
+          # Criar uma aresta entre o nó atual e o adjacente
+          Edge.find_or_create_by!(from_node: current_node, to_node: adjacent_node, bidirectional: true)
+          send_message("ir: #{unvisited_adjacent}")
+        else
+          @state_stack.pop
+          if @state_stack.empty?
+            puts "Todos os vértices foram visitados. DFS concluído."
+            @ws.close
+          else
+            previous_vertex = @state_stack.last
+            puts "Voltando para o vértice: #{previous_vertex}"
+            send_message("ir: #{previous_vertex}")
+          end
+        end
+      else
+        # Marcar o vértice atual como visitado
+        @visited_states.add(current_vertex)
+        @state_stack.push(current_vertex)
+  
+        # Explorar o próximo vértice não visitado
+        next_vertex = adjacents.find { |v| !@visited_states.include?(v) }
+        if next_vertex
+          puts "Explorando o vértice: #{next_vertex}"
+          # Adicionar o nó adjacente ao banco de dados, se ainda não existir
+          adjacent_node = Node.find_or_create_by!(name: next_vertex, graph: @graph)
+          # Criar uma aresta entre o nó atual e o próximo
+          Edge.find_or_create_by!(from_node: current_node, to_node: adjacent_node, bidirectional: true)
+          send_message("ir: #{next_vertex}")
+        else
+          @state_stack.pop
+          if @state_stack.empty?
+            puts "Todos os vértices foram visitados. DFS concluído."
+            @ws.close
+          else
+            previous_vertex = @state_stack.last
+            puts "Voltando para o vértice: #{previous_vertex}"
+            send_message("ir: #{previous_vertex}")
+          end
+        end
+      end
+    rescue StandardError => e
+      puts "Erro ao processar mensagem: #{e.message}"
     end
-  end
-
-  def handle_state_message(data)
-    current_state_name = data['current_state']
-    transitions = data['possible_transitions']
-
-    puts "Recebendo estado: #{current_state_name}"
-    puts "Transições possíveis: #{transitions.join(', ')}"
-
-    current_state = @graph.nodes.find_or_create_by(name: current_state_name)
-
-    transitions.each do |transition|
-      target_node = Node.find_or_create_by(name: transition, graph: @graph)
-      Edge.find_or_create_by(from_node: current_state, to_node: target_node)
-    end
-
-    if @visited_states.include?(current_state_name)
-      puts "Estado '#{current_state_name}' já processado, ignorando..."
-      return
-    end
-
-    @visited_states.add(current_state_name)
-    @state_stack.concat(transitions)
-
-    process_next_state if @state_stack.any?
-  end
-
-  def handle_state_request(data)
-    current_state_name = data['current_state']
-    puts "Recebendo pedido de estado para: #{current_state_name}"
-  end
-
-  def process_next_state
-    next_state_name = @state_stack.pop
-    send_message({ type: 'state_request', current_state: next_state_name }.to_json)
-  end
+  end  
 end

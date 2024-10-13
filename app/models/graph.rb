@@ -23,6 +23,31 @@ class Graph < ApplicationRecord
     cycles.uniq
   end
 
+  def shortest_path(start, target)
+    adjacency_list =  adjacency_list
+    
+    queue = [[start, [start]]]
+    visited = { start => true }
+  
+    while !queue.empty?
+      current_node, path = queue.shift
+  
+      # Se o nó atual for o destino, retorna o caminho
+      return path if current_node == target
+  
+      # Explorar vizinhos não visitados
+      adjacency_list = [current_node].each do |neighbor|
+        unless visited[neighbor]
+          visited[neighbor] = true
+          queue << [neighbor, path + [neighbor]]
+        end
+      end
+    end
+  
+    # Caso não encontre o destino
+    nil
+  end
+
   private
 
   def find_cycles_from_node(node, visited, stack, cycles)

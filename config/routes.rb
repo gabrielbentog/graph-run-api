@@ -9,4 +9,8 @@ Rails.application.routes.draw do
   # root "posts#index"
 
   get 'websocket/connect', to: 'websocket#connect'
+
+  post 'websocket/create_group', to: 'websocket#create_group'
+  post 'websocket/create_labirint', to: 'websocket#create_labirint'
+  post 'websocket/get_url', to: 'websocket#get_url'
 end
