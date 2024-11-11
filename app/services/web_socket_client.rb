@@ -12,8 +12,6 @@ class WebSocketClient
     @visited_states = Set.new
   end
 
-
-
   def connect
     EM.run {
       @ws = Faye::WebSocket::Client.new(@url)

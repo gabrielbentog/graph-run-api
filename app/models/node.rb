@@ -4,4 +4,6 @@ class Node < ApplicationRecord
   has_many :incoming_edges, class_name: 'Edge', foreign_key: 'to_node_id', dependent: :destroy
 
   has_many :adjacent_nodes, through: :outgoing_edges, source: :to_node
+
+  enum node_type: { default: 0, start: 1, end: 2 }
 end

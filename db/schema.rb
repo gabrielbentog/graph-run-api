@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2024_09_02_013635) do
+ActiveRecord::Schema[7.2].define(version: 2024_11_11_024800) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -20,6 +20,7 @@ ActiveRecord::Schema[7.2].define(version: 2024_09_02_013635) do
     t.boolean "bidirectional", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.float "weight", default: 0.0, null: false
     t.index ["from_node_id"], name: "index_edges_on_from_node_id"
     t.index ["to_node_id"], name: "index_edges_on_to_node_id"
   end
@@ -35,6 +36,7 @@ ActiveRecord::Schema[7.2].define(version: 2024_09_02_013635) do
     t.bigint "graph_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "node_type", default: 0, null: false
     t.index ["graph_id"], name: "index_nodes_on_graph_id"
   end
 
