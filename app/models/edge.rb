@@ -7,6 +7,6 @@ class Edge < ApplicationRecord
   private
 
   def create_bidirectional_edge
-    Edge.create(from_node: to_node, to_node: from_node, bidirectional: false) unless Edge.exists?(from_node: to_node, to_node: from_node)
+    Edge.create(from_node: to_node, to_node: from_node, bidirectional: false, weight: self.weight) unless Edge.exists?(from_node: to_node, to_node: from_node)
   end
 end

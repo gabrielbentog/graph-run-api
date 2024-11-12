@@ -40,9 +40,9 @@ class WebSocketClient
 
   def handle_message(message)
     begin
-      # Extraindo o vértice atual e a lista de adjacentes
-      vertex_match = message.match(/Vértice atual: (\d+)/)
-      adjacents_match = message.match(/Adjacentes: \[(.*)\]/)
+      # Extraindo o vértice atual, tipo e lista de adjacentes com pesos
+      vertex_match = message.match(/Vértice atual: (\d+), Tipo: (\d+)/)
+      adjacents_match = message.match(/Adjacentes\(Vertice, Peso\): \[(.*)\]/)
   
       unless vertex_match && adjacents_match
         puts "Mensagem não está no formato esperado: #{message}"
@@ -50,21 +50,28 @@ class WebSocketClient
       end
   
       current_vertex = vertex_match[1]
-      adjacents = adjacents_match[1].split(',').map(&:strip).map { |a| a.delete("'") }
+      node_type = vertex_match[2].to_i
+      adjacents = adjacents_match[1].scan(/\((\d+), (\d+)\)/).map { |a, w| [a, w.to_i] }
   
-      # Adicionando o nó atual ao banco de dados, se ainda não existir
-      current_node = Node.find_or_create_by!(name: current_vertex, graph: @graph)
+      # Adicionando o nó atual ao banco de dados, se ainda não existir, com o tipo correto
+      current_node = Node.find_or_create_by!(name: current_vertex, graph: @graph, node_type: node_type)
   
+      if node_type == 2
+        puts "Nó de saída encontrado: #{current_vertex}. Encerrando conexão."
+        @ws.close
+        return
+      end
+
       # Verificar se o vértice atual já foi visitado
       if @visited_states.include?(current_vertex)
-        unvisited_adjacent = adjacents.find { |v| !@visited_states.include?(v) }
+        unvisited_adjacent = adjacents.find { |v, _| !@visited_states.include?(v) }
         if unvisited_adjacent
-          puts "Explorando o vértice: #{unvisited_adjacent}"
-          # Adicionar o nó adjacente ao banco de dados, se ainda não existir
-          adjacent_node = Node.find_or_create_by!(name: unvisited_adjacent, graph: @graph)
-          # Criar uma aresta entre o nó atual e o adjacente
-          Edge.find_or_create_by!(from_node: current_node, to_node: adjacent_node, bidirectional: true)
-          send_message("ir: #{unvisited_adjacent}")
+          adjacent_vertex, weight = unvisited_adjacent
+          puts "Explorando o vértice: #{adjacent_vertex} com peso #{weight}"
+          adjacent_node = Node.find_or_create_by!(name: adjacent_vertex, graph: @graph)
+          Edge.find_or_create_by!(from_node: current_node, to_node: adjacent_node, weight: weight, bidirectional: true)
+          p "ir: #{adjacent_vertex}"
+          send_message("ir: #{adjacent_vertex}")
         else
           @state_stack.pop
           if @state_stack.empty?
@@ -82,13 +89,12 @@ class WebSocketClient
         @state_stack.push(current_vertex)
   
         # Explorar o próximo vértice não visitado
-        next_vertex = adjacents.find { |v| !@visited_states.include?(v) }
-        if next_vertex
-          puts "Explorando o vértice: #{next_vertex}"
-          # Adicionar o nó adjacente ao banco de dados, se ainda não existir
+        next_adjacent = adjacents.find { |v, _| !@visited_states.include?(v) }
+        if next_adjacent
+          next_vertex, weight = next_adjacent
+          puts "Explorando o vértice: #{next_vertex} com peso #{weight}"
           adjacent_node = Node.find_or_create_by!(name: next_vertex, graph: @graph)
-          # Criar uma aresta entre o nó atual e o próximo
-          Edge.find_or_create_by!(from_node: current_node, to_node: adjacent_node, bidirectional: true)
+          Edge.find_or_create_by!(from_node: current_node, to_node: adjacent_node, weight: weight, bidirectional: true)
           send_message("ir: #{next_vertex}")
         else
           @state_stack.pop
@@ -105,5 +111,5 @@ class WebSocketClient
     rescue StandardError => e
       puts "Erro ao processar mensagem: #{e.message}"
     end
-  end  
+  end
 end

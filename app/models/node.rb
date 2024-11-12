@@ -5,5 +5,5 @@ class Node < ApplicationRecord
 
   has_many :adjacent_nodes, through: :outgoing_edges, source: :to_node
 
-  enum node_type: { default: 0, start: 1, end: 2 }
+  enum :node_type, { default: 0, start: 1, end: 2 }
 end
