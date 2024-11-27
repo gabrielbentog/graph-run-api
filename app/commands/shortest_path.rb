@@ -32,7 +32,13 @@ class ShortestPath
 
       # Verifique se o nó final foi encontrado
       if node.id == end_node.id
-        puts "Caminho encontrado: #{path.map { |n| n.name }.join(' -> ')}"
+        # Exibe o caminho encontrado e os pesos das arestas
+        path_names = path.map(&:name)
+        path_weights = path.each_cons(2).map do |from, to|
+          Edge.find_by(from_node: from, to_node: to).weight
+        end
+        puts "Caminho encontrado: #{path_names.join(' -> ')}"
+        puts "Pesos das arestas: #{path_weights.join(' -> ')}"
         return path
       end
   
