@@ -35,70 +35,78 @@ class WebSocketClient
 
   def handle_message(message)
     begin
-      # Extraindo o vértice atual, tipo e lista de adjacentes com pesos
+      # Extraindo informações do vértice atual
       vertex_match = message.match(/Vértice atual: (\d+), Tipo: (\d+)/)
       adjacents_match = message.match(/Adjacentes\(Vertice, Peso\): \[(.*)\]/)
-
+  
       unless vertex_match && adjacents_match
         puts "Mensagem não está no formato esperado: #{message}"
         return
       end
-
+  
       current_vertex = vertex_match[1]
       node_type = vertex_match[2].to_i
       adjacents = adjacents_match[1].scan(/\((\d+), (\d+)\)/).map { |a, w| [a, w.to_i] }
-
-      # Adicionando o nó atual ao banco de dados, se ainda não existir, com o tipo correto
+  
+      # Adicionando ou atualizando o nó atual
       current_node = Node.find_or_initialize_by(name: current_vertex, graph: @graph)
       current_node.node_type = node_type
       current_node.save!
 
+      # Atualizando a lista de adjacência apenas para os vértices válidos
+      adjacents.each do |adjacent_vertex, weight|
+        adjacent_node = Node.find_or_create_by!(name: adjacent_vertex, graph: @graph)
+        Edge.find_or_create_by!(
+          from_node: current_node,
+          to_node: adjacent_node,
+          weight: weight,
+          bidirectional: true
+        )
+      end
+  
+      # Encerrar conexão ao encontrar um nó de saída
       if node_type == 2
         puts "Nó de saída encontrado: #{current_vertex}. Encerrando conexão."
         @ws.close
         return
       end
-
-      # Verificar se o vértice atual já foi visitado
-      unless @visited_states.include?(current_vertex)
-        # Marcar o vértice atual como visitado
-        @visited_states.add(current_vertex)
-        @queue.push(current_vertex)  # Adiciona o vértice à fila para explorar em BFS
+  
+      # Se não houver mais vértices para explorar
+      if adjacents.empty?
+        puts "Sem vértices adjacentes para explorar. Conexão encerrada."
+        @ws.close
+        return
       end
-
-      # Processar o próximo vértice na fila, se houver
-      if @queue.any?
-        next_vertex = @queue.shift  # Retira o próximo vértice da fila
-        puts "Processando o vértice: #{next_vertex}"
-        current_node = Node.find_or_create_by!(name: next_vertex, graph: @graph)
-
-        # Explorar o próximo vértice adjacente não visitado
-        unvisited_adjacent = adjacents.find { |adjacent_vertex, _| !@visited_states.include?(adjacent_vertex) }
-
-        if unvisited_adjacent
-          adjacent_vertex, weight = unvisited_adjacent
-          unless @visited_states.include?(adjacent_vertex)
-            adjacent_node = Node.find_or_create_by!(name: adjacent_vertex, graph: @graph)
-            Edge.find_or_create_by!(from_node: current_node, to_node: adjacent_node, weight: weight, bidirectional: true)
-            puts "Explorando o vértice: #{adjacent_vertex} com peso #{weight}"
-            send_message("ir: #{adjacent_vertex}")  # Envia a mensagem de navegação para o próximo vértice
-
-            # Adiciona o vértice adjacente à fila para exploração posterior
-            @queue.push(adjacent_vertex)
-          end
-        end
-
-        # Após explorar os adjacentes, verifica se há mais na fila
-        if @queue.empty?
-          puts "Todos os vértices foram visitados. BFS concluído."
+  
+      # Processar o próximo vértice adjacente
+      unvisited_adjacent = adjacents.find { |adjacent_vertex, _| !@visited_states.include?(adjacent_vertex) }
+  
+      if unvisited_adjacent
+        # Marcar o vértice como visitado
+        @visited_states.add(current_vertex)
+  
+        adjacent_vertex, weight = unvisited_adjacent
+        puts "Explorando o vértice: #{adjacent_vertex} com peso #{weight}"
+  
+        # Enviar mensagem para explorar o próximo vértice adjacente
+        send_message("ir: #{adjacent_vertex}")
+      else
+        # Permitir voltar para explorar vértices ainda não processados
+        puts "Todos os adjacentes foram visitados. Voltando para explorar outros caminhos."
+        @queue.pop unless @queue.empty?
+  
+        if @queue.any?
+          previous_vertex = @queue.last
+          puts "Voltando para o vértice: #{previous_vertex}"
+          send_message("ir: #{previous_vertex}")
+        else
+          puts "Exploração concluída. Encerrando conexão."
           @ws.close
         end
-      else
-        puts "Fila vazia, BFS concluído."
-        @ws.close
       end
     rescue StandardError => e
       puts "Erro ao processar mensagem: #{e.message}"
     end
   end
+  
 end
